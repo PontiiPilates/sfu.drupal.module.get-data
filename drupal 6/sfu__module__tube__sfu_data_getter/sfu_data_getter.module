@@ -1,0 +1,56 @@
+<?php
+
+/**
+ * Implements hook menu.
+ * 
+ * ! Модуль должен располагаться на хосте, на котором находится база данных.
+ * ! Поскольку конфигурации баз данных различны, то и модуль формирующий .json для каждого раздела будет индивидуальный.
+ * ! Размещается: /htdocs/modules/sfu__data_getter
+ * ! Вариация модуля под Drupal 6
+ */
+
+function sfu_data_getter_menu()
+{
+	$items = array();
+	// создание страницы, конфигурация которой минует тему drupal
+	$items['get-tube'] = array(
+		'page callback' => '_page',
+		'access arguments' => array('access content'),
+		'access' => user_access('access content'),
+		'type' => MENU_CALLBACK,
+	);
+	return $items;
+}
+
+/**
+ *
+ */
+
+function _page()
+{
+	// тип страницы .json
+	header("Content-type: application/json");
+	// CORS
+	header("Access-Control-Allow-Origin: https://next.sfu-kras.ru");
+
+	
+	// получение всех объявлений
+    $q1 = "SELECT nid, title, type FROM node WHERE status = 1";
+    $r1 = db_query($q1);
+
+    // сборка массива со всеми новостями	
+    while ($e = db_fetch_object($r1)) {
+
+        $j1[] = array(
+            'name' => $e->title,
+            'link' => 'https://tube.sfu-kras.ru/node/' . $e->nid,
+            'type' => $e->type,
+        );
+    }
+
+    // echo '<pre>';
+    // print_r($j1);
+    // echo '</pre>';
+
+    echo json_encode($j1);
+}

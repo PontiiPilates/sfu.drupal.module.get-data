@@ -1,0 +1,109 @@
+<?php
+
+/**
+ * Модуль должен располагаться на хосте, на котором находится база данных.
+ * Поскольку конфигурации таблиц различны, то и модуль формирующий .json для каждого хоста - индивидуальный.
+ * Path: /htdocs/sites/structure.sfu-kras.ru/modules/sfu_data_getter
+ */
+
+
+/**
+ * Implements hook_menu.
+ */
+function sfu_data_getter_menu()
+{
+	$items = array();
+	// создание страницы, конфигурация которой минует тему drupal
+	$items['get-structure'] = array(
+		'page callback' => '_page',
+		'access arguments' => array('access content'),
+		'access' => user_access('access content'),
+		'type' => MENU_CALLBACK,
+	);
+	return $items;
+}
+
+/**
+ * Page.
+ */
+function _page()
+{
+	// тип страницы .json
+	header("Content-type: application/json");
+	// CORS
+	header("Access-Control-Allow-Origin: https://next.sfu-kras.ru");
+
+	$q1 = "SELECT node.nid, node.vid, node.title, node.created, node.changed, content_type_person.field_person_post1_value, content_type_person.field_person_post2_value, content_type_person.field_person_post3_value, content_type_person.field_person_photo_fid FROM node INNER JOIN content_type_person ON content_type_person.nid = node.nid AND content_type_person.vid = node.vid WHERE node.status = 1 AND node.type = 'person'";
+	$r1 = db_query($q1);
+
+	// сборка даты по людям
+	while ($e = db_fetch_object($r1)) {
+
+		// извечение пути аватарки при ее наличии
+		if ($e->field_person_photo_fid) {
+			$filepath = db_result(db_query("SELECT filepath FROM files WHERE fid = {$e->field_person_photo_fid}"));
+			$filepath = 'https://structure.sfu-kras.ru/' . $filepath;
+		} else {
+			$filepath = 'unknown';
+		}
+
+		// сценарии склеивания должности
+		$p1 = $e->field_person_post1_value;
+		$p2 = $e->field_person_post2_value;
+		$p3 = $e->field_person_post3_value;
+		// при наличии от 1й должности
+		if ($p1) {
+			$post = $p1;
+			if ($p2) {
+				$post .= ', ' . $p2;
+				if ($p3) {
+					$post .= ', ' . $p3;
+				}
+			}
+			if ($p3) {
+				$post .= ', ' . $p3;
+			}
+			// при наличии от 2й должности
+		} elseif ($p2) {
+			$post = $p2;
+			if ($p3) {
+				$post .= ', ' . $p3;
+			}
+			// при наличии от 3й должности
+		} elseif ($p3) {
+			$post = $p3;
+		}
+
+		// формирование массива
+		$j1[] = array(
+			// 'id' => $e->nid,
+			'name' => $e->title,
+			'link' => 'https://structure.sfu-kras.ru/node/' . $e->nid,
+			'position' => $post,
+			'type' => 'person',
+			'avatar' => $filepath,
+			'created'   => $e->created,
+			'changed'   => $e->changed,
+		);
+	}
+
+	$q2 = "SELECT title, nid, created, changed FROM node WHERE type = 'department'";
+	$r2 = db_query($q2);
+
+	// сборка даты по подразделениям
+	while ($e = db_fetch_object($r2)) {
+		$j2[] = array(
+			'name' => $e->title,
+			'link' => 'https://structure.sfu-kras.ru/node/' . $e->nid,
+			'type' => 'department', //TODO: это нужно заменить на department
+			'created'   => $e->created,
+			'changed'   => $e->changed,
+		);
+	}
+
+	// склеивание массивов
+	$jm = array_merge($j1, $j2);
+
+	// вывод в формате .json
+	echo json_encode($jm);
+}

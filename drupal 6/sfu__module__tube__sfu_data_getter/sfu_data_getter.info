@@ -1,0 +1,4 @@
+name = sfu_data_getter
+description = Отдает .json с данными для поиска на агрегаторе
+package = СФУ
+core = 6.x

@@ -1,0 +1,83 @@
+<?php
+
+/**
+ * Implements hook menu.
+ * 
+ * ! Модуль должен располагаться на хосте, на котором находится база данных.
+ * ! Поскольку конфигурации баз данных различны, то и модуль формирующий .json для каждого раздела будет индивидуальный.
+ * ! Размещается: /htdocs/modules/sfu__data_getter
+ */
+
+function sfu_data_getter_menu()
+{
+	$items = array();
+	// создание страницы, конфигурация которой минует тему drupal
+	$items['get-news'] = array(
+		'page callback' => '_page',
+		'access arguments' => array('access content'),
+		'access' => user_access('access content'),
+		'type' => MENU_CALLBACK,
+	);
+	return $items;
+}
+
+/**
+ * ! Отдает информацию по людям и по подразделениям
+ */
+
+function _page()
+{
+	// тип страницы .json
+	header("Content-type: application/json");
+	// CORS
+	header("Access-Control-Allow-Origin: https://next.sfu-kras.ru");
+
+	
+	// получение идентификаторов объявлений
+	$q1 = "SELECT node.nid FROM node WHERE nid IN (SELECT nid FROM term_node WHERE tid = 68) AND status = 1 AND type = 'news'";
+	$r1 = db_query($q1);
+	
+	// сборка массива идентификаторов объявлений
+	while ($e = db_fetch_object($r1)) {
+		$j_ad[] = $e->nid;
+	}
+	
+	// получение идентификаторов объявлений
+	$q2 = "SELECT nid, title FROM node WHERE status = 1 AND nid IN (SELECT nid FROM content_type_news WHERE field_news_event_date_value != 'NULL')";
+	$r2 = db_query($q2);
+
+	// сборка массива идентификаторов анонсов
+	while ($e = db_fetch_object($r2)) {
+		$j_event[] = $e->nid;
+	}
+	
+	// получение всех объявлений
+	$q3 = "SELECT nid, title FROM node WHERE status = 1 AND type = 'news'";
+	$r3 = db_query($q3);
+
+	// сборка массива со всеми новостями	
+	while ($e = db_fetch_object($r3)) {
+	
+		$type = 'news';
+		$nid = $e->nid;
+
+		// проверка на объявление
+		if(in_array($nid, $j_ad)) {
+			$type = 'ad';
+		}
+
+		// проверка на анонс
+		if(in_array($nid, $j_event)) {
+			$type = 'event';
+		}
+
+		$j3[] = array(
+			// 'id' => $e->nid,
+			'name' => $e->title,
+			'link' => 'https://news.sfu-kras.ru/node/' . $nid,
+			'type' => $type,
+		);
+	}
+	
+	echo json_encode($j3);
+}
