@@ -1,0 +1,185 @@
+<?php
+
+/**
+ * * Возвращает выборку из базы данных в json
+ * * Dir: /htdocs/sites/structure.sfu-kras.ru/modules/sfu_data_getter
+ * * Path: https://structure.sfu-kras.ru/get-structure
+ */
+
+/**
+ * Implements hook_menu
+ */
+function sfu_data_getter_menu()
+{
+	$items = array();
+	// создание страницы, конфигурация которой минует тему drupal
+	$items['get-structure'] = array(
+		'page callback' => '_page',
+		'access arguments' => array('access content'),
+		'access' => user_access('access content'),
+		'type' => MENU_CALLBACK,
+	);
+	return $items;
+}
+
+/**
+ * Page
+ */
+function _page()
+{
+	// Тип страницы .json
+	header("Content-type: application/json");
+	// CORS
+	header("Access-Control-Allow-Origin: https://next.sfu-kras.ru");
+
+	// Без нод
+	$wn1 = '9998, 9999';
+
+	// Получение материалов о сотрудниках, за исключением тех, которые указаны явно
+	$q1 = "SELECT
+			node.nid,
+			node.vid,
+			node.title,
+			node.created,
+			node.changed,
+			content_type_person.field_person_post1_value,
+			content_type_person.field_person_post2_value,
+			content_type_person.field_person_post3_value,
+			content_type_person.field_person_photo_fid
+		   FROM node
+		   JOIN content_type_person
+		   ON content_type_person.nid = node.nid
+		   WHERE node.status = 1
+		   AND node.nid NOT IN ($wn1)
+		   GROUP BY node.nid";
+	$r1 = db_query($q1);
+
+	// Сборка массива людей
+	while ($e = db_fetch_object($r1)) {
+
+		// Подготовка заголовка
+		$name = $e->title;
+		$name = strip_tags($name);
+		$name = trim($name);
+
+		// Подготовка ноды
+		$nid = $e->nid;
+
+		// Подготовка времени последней редакции
+		$timestamp = $e->changed;
+
+		/**
+		 * * Вот этот фрагмент с должностями требует отдельной спокойной вдумчивой доработки
+		 * * Некоторые должности не соответствую действительности
+		 * * Некоторые сотрудники занимают 2 должности
+		 * * И есть такие название должностей, которые я не знаю где находятся в базе
+		 * * Например: Верховец
+		 * * Поэтому нужно изучить бд и заново переосознать этот фрагмент по подготовке должности
+		 */
+		
+		// Подготовка должности
+		$p1 = $e->field_person_post1_value;
+		$p2 = $e->field_person_post2_value;
+		$p3 = $e->field_person_post3_value;
+
+		if ($p1) {
+			// При наличии от 1й должности
+			$post = $p1;
+			if ($p2) {
+				$post .= ', ' . $p2;
+				if ($p3) {
+					$post .= ', ' . $p3;
+				}
+			}
+			if ($p3) {
+				$post .= ', ' . $p3;
+			}
+			// При наличии от 2й должности
+		} elseif ($p2) {
+			$post = $p2;
+			if ($p3) {
+				$post .= ', ' . $p3;
+			}
+			// При наличии от 3й должности
+		} elseif ($p3) {
+			$post = $p3;
+		}
+
+
+		$text = $post;
+		$text = strip_tags($text);
+		$text = trim($text);
+
+		// Указание хоста
+		$host = 'structure';
+
+		// Формирование массива людей
+		$j1[] = array(
+			'name'			=> $name,
+			'link'			=> "https://$host.sfu-kras.ru/node/$nid",
+			'text'			=> $post,
+			'timestamp'		=> $timestamp,
+			'host'			=> $host,
+		);
+	}
+
+	// Без нод
+	$wn2 = '9998, 9999';
+
+	// Получение материалов о подразделениях, за исключением тех, которые указаны явно
+	$q2 = "SELECT
+			node.nid,
+			node.vid,
+			node.type,
+			node.title,
+			node.created,
+			node.changed,
+			content_type_department.field_dep_abbr_value
+		   FROM node
+		   JOIN content_type_department
+		   ON content_type_department.nid = node.nid
+		   WHERE node.status = 1
+		   AND node.nid NOT IN ($wn2)
+		   GROUP BY node.nid";
+	$r2 = db_query($q2);
+
+	// Сборка массива подразделений
+	while ($e = db_fetch_object($r2)) {
+
+		// Подготовка заголовка
+		$name = $e->title;
+
+		if ($e->field_dep_abbr_value) {
+			// Если есть аббревиатура
+			$abbr = $e->field_dep_abbr_value;
+			$name .= " ($abbr)";
+		}
+
+		$name = strip_tags($name);
+		$name = trim($name);
+
+		// Указание хоста
+		$host = 'structure';
+
+		// Подготовка ноды
+		$nid = $e->nid;
+
+		// Указание времени последнего изменения
+		$timestamp = $e->changed;
+
+		// Формирование массива подразделений
+		$j2[] = array(
+			'name'			=> $name,
+			'link'			=> "https://$host.sfu-kras.ru/node/$nid",
+			'text'          => '',
+			'timestamp'		=> $timestamp,
+			'host'          => $host,
+		);
+	}
+
+	// склеивание массивов
+	$jm = array_merge($j1, $j2);
+
+	// вывод в формате .json
+	echo json_encode($jm);
+}

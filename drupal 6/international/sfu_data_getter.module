@@ -1,0 +1,82 @@
+<?php
+
+/**
+ * * Возвращает выборку из базы данных в json
+ * * Dir: /htdocs/sites/international.sfu-kras.ru/modules/sfu_data_getter
+ * * Path: https://international.sfu-kras.ru/get-international
+ */
+
+/**
+ * Implements hook_menu
+ */
+function sfu_data_getter_menu()
+{
+    $items = array();
+    // создание страницы, конфигурация которой минует тему drupal
+    $items['get-international'] = array(
+        'page callback' => '_page',
+        'access arguments' => array('access content'),
+        'access' => user_access('access content'),
+        'type' => MENU_CALLBACK,
+    );
+    return $items;
+}
+
+/**
+ * Page
+ */
+function _page()
+{
+    // Тип страницы .json
+    header("Content-type: application/json");
+    // CORS
+    header("Access-Control-Allow-Origin: https://next.sfu-kras.ru");
+
+    // Без нод
+    $wn = '1, 2';
+
+    // Получение материалов, имеющих самую свежую ревизию за исключением тех, которые указаны явно
+    $q1 = "SELECT node_revisions.nid, MAX(node_revisions.vid) AS vid, node_revisions.title, node_revisions.body, node_revisions.timestamp, node.status
+           FROM node_revisions
+           JOIN node
+           ON node.nid = node_revisions.nid
+           WHERE node.status = 1
+           AND node.nid NOT IN ($wn)
+           GROUP BY node_revisions.nid";
+    $r1 = db_query($q1);
+
+    // Обход полученной выборки
+    while ($e = db_fetch_object($r1)) {
+
+        // Подготовка и очистка значений
+        $name = $e->title;
+        $name = strip_tags($name);
+        $name = trim($name);
+
+        $text = $e->body;
+        $text = strip_tags($text);
+        $text = trim($text);
+
+        $nid = $e->nid;
+
+        $timestamp = $e->timestamp;
+
+        $host = 'international';
+
+        // Сборка массива
+        $j1[] = array(
+            'name'          => $name,
+            'link'          => "https://$host.sfu-kras.ru/node/$nid",
+            'text'          => $text,
+            'timestamp'     => $timestamp,
+            'host'          => $host,
+        );
+    }
+
+    // Отладка
+    // echo '<pre>';
+    // print_r();
+    // echo '</pre>';
+
+    echo json_encode($j1);
+}
